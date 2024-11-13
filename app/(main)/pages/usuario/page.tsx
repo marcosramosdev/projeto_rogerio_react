@@ -11,7 +11,7 @@ import { InputText } from 'primereact/inputtext';
 import { Toast } from 'primereact/toast';
 import { Toolbar } from 'primereact/toolbar';
 import { classNames } from 'primereact/utils';
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 
 /* @todo Used 'as any' for types here. Will fix in next version due to onSelectionChange event type issue. */
 const Crud = () => {
@@ -28,13 +28,13 @@ const Crud = () => {
     const [deleteUsuarioDialog, setDeleteUsuarioDialog] = useState(false);
     const [deleteUsuariosDialog, setDeleteUsuariosDialog] = useState(false);
     const [usuario, setUsuario] = useState<Projeto.Usuario>(usuarioVazio);
-    const [selectedUsuarios, setSelectedUsuarios] = useState(null);
+    const [selectedUsuarios, setSelectedUsuarios] = useState<Projeto.Usuario[]>([]);
     const [submitted, setSubmitted] = useState(false);
     const [globalFilter, setGlobalFilter] = useState('');
     const toast = useRef<Toast>(null);
     const dt = useRef<DataTable<any>>(null);
 
-    const usuarioService = new UsuarioService();
+    const usuarioService = useMemo(() => new UsuarioService(), []);
     useEffect(() => {
         if (usuarios.length === 0) {
             usuarioService
@@ -42,8 +42,7 @@ const Crud = () => {
                 .then((response) => setUsuarios(response.data))
                 .catch((error) => console.log(error));
         }
-        //começa valendo tudo depois vale nada
-    }, [usuarios]);
+    }, [usuarios, usuarioService]);
 
     const openNew = () => {
         setUsuario(usuarioVazio);
@@ -146,8 +145,6 @@ const Crud = () => {
             });
     };
 
-    const findIndexById = (id: string) => {};
-
     const exportCSV = () => {
         dt.current?.exportCSV();
     };
@@ -157,23 +154,31 @@ const Crud = () => {
     };
 
     const deleteSelectedUsuarios = () => {
-        // let _usuarios = (usuarios as any)?.filter((val: any) => !(selectedUsuarios as any)?.includes(val));
-        // setUsuarios(_usuarios);
-        // setDeleteUsuariosDialog(false);
-        // setSelectedUsuarios(null);
-        // toast.current?.show({
-        //     severity: 'success',
-        //     summary: 'Successful',
-        //     detail: 'Deleted User',
-        //     life: 3000
-        // });
+        Promise.all(
+            selectedUsuarios.map(async (usuario) => {
+                if (usuario.id) {
+                    return await usuarioService.deletar(usuario.id);
+                }
+            })
+        )
+            .then(() => {
+                setSelectedUsuarios([]);
+                setUsuarios([]);
+                setDeleteUsuariosDialog(false);
+                toast?.current?.show({
+                    severity: 'success',
+                    summary: 'Sucesso!',
+                    detail: 'Users succesfuly deleted'
+                });
+            })
+            .catch(() => {
+                toast?.current?.show({
+                    severity: 'error',
+                    summary: 'error!',
+                    detail: 'Unexpected error deleting users'
+                });
+            });
     };
-
-    // const onCategoryChange = (e: RadioButtonChangeEvent) => {
-    //     let _usuario = { ...usuario };
-    //     _usuario['name'] = e.value;
-    //     setUsuario(_usuario);
-    // };
 
     const onInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>, name: string) => {
         const val = (e.target && e.target.value) || '';
@@ -181,14 +186,6 @@ const Crud = () => {
         _usuario[`${name}`] = val;
         setUsuario(_usuario);
     };
-
-    // const onInputNumberChange = (e: InputNumberValueChangeEvent, name: string) => {
-    //     const val = e.value || 0;
-    //     let _usuario = { ...usuario };
-    //     _usuario[`${name}`] = val;
-
-    //     setUsuario(_usuario);
-    // };
 
     const leftToolbarTemplate = () => {
         return (
@@ -388,7 +385,7 @@ const Crud = () => {
                         </div>
                     </Dialog>
 
-                    <Dialog visible={deleteUsuariosDialog} style={{ width: '450px' }} header="Confirm" modal footer={deleteUsuarioDialogFooter} onHide={hideDeleteUsuariosDialog}>
+                    <Dialog visible={deleteUsuariosDialog} style={{ width: '450px' }} header="Confirm" modal footer={deleteUsuariosDialogFooter} onHide={hideDeleteUsuariosDialog}>
                         <div className="flex align-items-center justify-content-center">
                             <i className="pi pi-exclamation-triangle mr-3" style={{ fontSize: '2rem' }} />
                             {usuarios && <span>Are you sure you want to delete the selected users?</span>}
